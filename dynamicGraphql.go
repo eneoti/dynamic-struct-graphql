@@ -19,6 +19,13 @@ func DynamicGraphql(name string, t reflect.Type) *graphql.Object {
 	n := t.NumField()
 	fields := make(map[string]*graphql.Field)
 	//--
+	objectConfig := graphql.ObjectConfig{
+		Fields: graphql.Fields(fields),
+		Name:   name,
+	}
+	obj := graphql.NewObject(objectConfig)
+	objects[name] = obj
+	//--
 	for i := 0; i < n; i++ {
 		f := t.Field(i)
 		//--base refine
@@ -33,7 +40,7 @@ func DynamicGraphql(name string, t reflect.Type) *graphql.Object {
 				}
 				fieldBase := genField(fBase.Type)
 				if fieldBase != nil {
-					fields[fNameBase] = fieldBase
+					obj.AddFieldConfig(fNameBase, fieldBase)
 				}
 			}
 			continue
@@ -46,16 +53,11 @@ func DynamicGraphql(name string, t reflect.Type) *graphql.Object {
 		}
 		field := genField(f.Type)
 		if field != nil {
-			fields[fName] = field
+			obj.AddFieldConfig(fName, field)
+
 		}
 
 	}
-	objectConfig := graphql.ObjectConfig{
-		Fields: graphql.Fields(fields),
-		Name:   name,
-	}
-	obj := graphql.NewObject(objectConfig)
-	objects[name] = obj
 	return obj
 }
 
@@ -88,7 +90,7 @@ func genObject(t reflect.Type) *graphql.Object {
 				}
 				fieldBase := genField(fBase.Type)
 				if fieldBase != nil {
-					fields[fNameBase] = fieldBase
+					obj.AddFieldConfig(fNameBase, fieldBase)
 				}
 			}
 			continue
@@ -128,10 +130,39 @@ func genField(t reflect.Type) *graphql.Field {
 		}
 	case reflect.Slice:
 		e := t.Elem()
-		return genField(e)
+		return genListField(e)
 
 	default:
 		return &graphql.Field{Type: getType(t, fKind)}
+	}
+	return nil
+}
+func genListField(t reflect.Type) *graphql.Field {
+	fKind := t.Kind()
+	switch fKind {
+	case reflect.Struct:
+		if t.Name() != "Time" {
+			obj := genObject(t)
+			return &graphql.Field{Type: graphql.NewList(obj)}
+		}
+	case reflect.Ptr:
+		s := t.Elem()
+		kind := s.Kind()
+		if kind != reflect.Struct {
+			tempType := getType(s, kind)
+			return &graphql.Field{Type: graphql.NewList(tempType)}
+		}
+		if s.Name() != "Location" && s.Name() != "Time" {
+			obj := genObject(s)
+			return &graphql.Field{Type: graphql.NewList(obj)}
+		}
+	case reflect.Slice:
+		e := t.Elem()
+		return genListField(e)
+
+	default:
+		tempType := getType(t, fKind)
+		return &graphql.Field{Type: graphql.NewList(tempType)}
 	}
 	return nil
 }
@@ -166,7 +197,6 @@ func getType(t reflect.Type, kind reflect.Kind) graphql.Output {
 		e := t.Elem()
 		return getType(e, e.Kind())
 	default:
-
 		return nil
 	}
 	return graphqlType
