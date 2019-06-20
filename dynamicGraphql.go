@@ -117,6 +117,9 @@ func genField(t reflect.Type) *graphql.Field {
 		if t.Name() != "Time" {
 			obj := genObject(t)
 			return &graphql.Field{Type: obj}
+		} else {
+			return &graphql.Field{Type: graphql.String}
+
 		}
 	case reflect.Ptr:
 		s := t.Elem()
